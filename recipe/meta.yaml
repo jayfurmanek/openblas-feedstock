@@ -19,7 +19,7 @@ source:
     - 0004-add.blas1.single.fp.patch
 
 build:
-  number: 3
+  number: 4
   skip: true  # [win and vc<14]
 
 requirements:
