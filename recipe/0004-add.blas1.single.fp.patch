@@ -1,0 +1,2118 @@
+diff --git a/kernel/power/KERNEL.POWER8 b/kernel/power/KERNEL.POWER8
+index 1aa0610..cbcffb8 100644
+--- a/kernel/power/KERNEL.POWER8
++++ b/kernel/power/KERNEL.POWER8
+@@ -89,14 +89,14 @@ ZTRSMKERNEL_RT	= ../generic/trsm_kernel_RT.c
+ #SMINKERNEL   = ../arm/min.c
+ #DMINKERNEL   = ../arm/min.c
+ #
+-#ISAMAXKERNEL = ../arm/iamax.c
++ISAMAXKERNEL = isamax.c
+ IDAMAXKERNEL = idamax.c
+-#ICAMAXKERNEL = ../arm/izamax.c
+-IZAMAXKERNEL =  izamax.c
++ICAMAXKERNEL = icamax.c
++IZAMAXKERNEL = izamax.c
+ #
+-#ISAMINKERNEL = ../arm/iamin.c
+-IDAMINKERNEL =  idamin.c
+-#ICAMINKERNEL = ../arm/izamin.c
++ISAMINKERNEL = isamin.c
++IDAMINKERNEL = idamin.c
++ICAMINKERNEL = icamin.c
+ IZAMINKERNEL = izamin.c
+ #
+ #ISMAXKERNEL  = ../arm/imax.c
+@@ -110,9 +110,9 @@ DASUMKERNEL  = dasum.c
+ CASUMKERNEL  = casum.c
+ ZASUMKERNEL  = zasum.c
+ #
+-#SAXPYKERNEL  = ../arm/axpy.c
++SAXPYKERNEL  = saxpy.c
+ DAXPYKERNEL  = daxpy.c
+-#CAXPYKERNEL  = ../arm/zaxpy.c
++CAXPYKERNEL  = caxpy.c
+ ZAXPYKERNEL  = zaxpy.c
+ #
+ SCOPYKERNEL  = scopy.c
+@@ -123,7 +123,7 @@ ZCOPYKERNEL  = zcopy.c
+ SDOTKERNEL   =  sdot.c
+ DDOTKERNEL   =  ddot.c
+ DSDOTKERNEL  =  sdot.c
+-#CDOTKERNEL   = ../arm/zdot.c
++CDOTKERNEL   =  cdot.c
+ ZDOTKERNEL   =  zdot.c
+ #
+ SNRM2KERNEL  = ../arm/nrm2.c
+@@ -133,7 +133,7 @@ ZNRM2KERNEL  = ../arm/znrm2.c
+ #
+ SROTKERNEL   = srot.c
+ DROTKERNEL   = drot.c
+-CROTKERNEL   = zrot.c
++CROTKERNEL   = crot.c
+ ZROTKERNEL   = zrot.c
+ #
+ SSCALKERNEL  = sscal.c
+diff --git a/kernel/power/caxpy.c b/kernel/power/caxpy.c
+new file mode 100644
+index 0000000..4bdf13c
+--- /dev/null
++++ b/kernel/power/caxpy.c
+@@ -0,0 +1,145 @@
++/*
++Copyright (c) 2013-2018, The OpenBLAS Project
++All rights reserved.
++Redistribution and use in source and binary forms, with or without
++modification, are permitted provided that the following conditions are
++met:
++1. Redistributions of source code must retain the above copyright
++notice, this list of conditions and the following disclaimer.
++2. Redistributions in binary form must reproduce the above copyright
++notice, this list of conditions and the following disclaimer in
++the documentation and/or other materials provided with the
++distribution.
++3. Neither the name of the OpenBLAS project nor the names of
++its contributors may be used to endorse or promote products
++derived from this software without specific prior written permission.
++THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
++AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
++IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
++ARE DISCLAIMED. IN NO EVENT SHALL THE OPENBLAS PROJECT OR CONTRIBUTORS BE
++LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
++DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
++SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
++CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
++OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE
++USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
++*****************************************************************************/
++
++#include "common.h"
++ 
++
++#ifndef HAVE_ASM_KERNEL
++#include <altivec.h> 
++static void caxpy_kernel_16(BLASLONG n, FLOAT *x, FLOAT *y, FLOAT alpha_r, FLOAT alpha_i)
++{
++
++#if ( !defined(CONJ) && !defined(XCONJ) ) || ( defined(CONJ) && defined(XCONJ) )
++
++    register __vector float valpha_r = {alpha_r, alpha_r,alpha_r, alpha_r};
++    register __vector float valpha_i = {-alpha_i, alpha_i,-alpha_i, alpha_i};
++
++#else
++    register __vector float valpha_r = {alpha_r, -alpha_r,alpha_r, -alpha_r};
++    register __vector float valpha_i = {alpha_i, alpha_i,alpha_i, alpha_i};
++#endif
++
++    __vector unsigned char swap_mask = { 4,5,6,7,0,1,2,3, 12,13,14,15, 8,9,10,11};
++    register __vector float *vy = (__vector float *) y;
++    register __vector float *vx = (__vector float *) x;
++    BLASLONG i=0;
++    for (; i < n/2; i += 8) {
++
++        register __vector float vy_0 = vy[i];
++        register __vector float vy_1 = vy[i + 1];
++        register __vector float vy_2 = vy[i + 2];
++        register __vector float vy_3 = vy[i + 3];
++        register __vector float vy_4 = vy[i + 4];
++        register __vector float vy_5 = vy[i + 5];
++        register __vector float vy_6 = vy[i + 6];
++        register __vector float vy_7 = vy[i + 7];
++        register __vector float vx_0 = vx[i];
++        register __vector float vx_1 = vx[i + 1];
++        register __vector float vx_2 = vx[i + 2];
++        register __vector float vx_3 = vx[i + 3];
++        register __vector float vx_4 = vx[i + 4];
++        register __vector float vx_5 = vx[i + 5];
++        register __vector float vx_6 = vx[i + 6];
++        register __vector float vx_7 = vx[i + 7];
++        vy_0 += vx_0*valpha_r;
++        vy_1 += vx_1*valpha_r;
++        vy_2 += vx_2*valpha_r;
++        vy_3 += vx_3*valpha_r;
++        vy_4 += vx_4*valpha_r;
++        vy_5 += vx_5*valpha_r;
++        vy_6 += vx_6*valpha_r;
++        vy_7 += vx_7*valpha_r;
++        vx_0 = vec_perm(vx_0, vx_0, swap_mask);
++        vx_1 = vec_perm(vx_1, vx_1, swap_mask);
++        vx_2 = vec_perm(vx_2, vx_2, swap_mask);
++        vx_3 = vec_perm(vx_3, vx_3, swap_mask);
++        vx_4 = vec_perm(vx_4, vx_4, swap_mask);
++        vx_5 = vec_perm(vx_5, vx_5, swap_mask);
++        vx_6 = vec_perm(vx_6, vx_6, swap_mask);
++        vx_7 = vec_perm(vx_7, vx_7, swap_mask);
++        vy_0 += vx_0*valpha_i;
++        vy_1 += vx_1*valpha_i;
++        vy_2 += vx_2*valpha_i;
++        vy_3 += vx_3*valpha_i;
++        vy_4 += vx_4*valpha_i;
++        vy_5 += vx_5*valpha_i;
++        vy_6 += vx_6*valpha_i;
++        vy_7 += vx_7*valpha_i;
++        vy[i] = vy_0;
++        vy[i + 1] = vy_1;
++        vy[i + 2] = vy_2;
++        vy[i + 3] = vy_3;
++        vy[i + 4] = vy_4;
++        vy[i + 5] = vy_5 ;
++        vy[i + 6] = vy_6 ;
++        vy[i + 7] = vy_7 ;        
++
++    }
++}
++#endif
++int CNAME(BLASLONG n, BLASLONG dummy0, BLASLONG dummy1, FLOAT da_r, FLOAT da_i, FLOAT *x, BLASLONG inc_x, FLOAT *y, BLASLONG inc_y, FLOAT *dummy, BLASLONG dummy2) {
++    BLASLONG i = 0;
++    BLASLONG ix = 0, iy = 0;
++    if (n <= 0) return (0);
++    if ((inc_x == 1) && (inc_y == 1)) {
++        BLASLONG n1 = n & -16;
++        if (n1) { 
++            caxpy_kernel_16(n1, x, y, da_r,da_i);
++            ix = 2 * n1;
++        }
++        i = n1;
++        while (i < n) {
++#if !defined(CONJ)
++            y[ix] += (da_r * x[ix] - da_i * x[ix + 1]);
++            y[ix + 1] += (da_r * x[ix + 1] + da_i * x[ix]);
++#else
++            y[ix] += (da_r * x[ix] + da_i * x[ix + 1]);
++            y[ix + 1] -= (da_r * x[ix + 1] - da_i * x[ix]);
++#endif
++            i++;
++            ix += 2;
++        }
++        return (0);
++
++    }
++    inc_x *= 2;
++    inc_y *= 2;
++    while (i < n) {
++#if !defined(CONJ)
++        y[iy] += (da_r * x[ix] - da_i * x[ix + 1]);
++        y[iy + 1] += (da_r * x[ix + 1] + da_i * x[ix]);
++#else
++        y[iy] += (da_r * x[ix] + da_i * x[ix + 1]);
++        y[iy + 1] -= (da_r * x[ix + 1] - da_i * x[ix]);
++#endif
++        ix += inc_x;
++        iy += inc_y;
++        i++;
++    }
++    return (0);
++}
++
+diff --git a/kernel/power/cdot.c b/kernel/power/cdot.c
+new file mode 100644
+index 0000000..f86a33f
+--- /dev/null
++++ b/kernel/power/cdot.c
+@@ -0,0 +1,164 @@
++/*Copyright (c) 2013-201\n8, The OpenBLAS Project
++All rights reserved.
++Redistribution and use in source and binary forms, with or without
++modification, are permitted provided that the following conditions are
++met:
++1. Redistributions of source code must retain the above copyright
++notice, this list of conditions and the following disclaimer.
++2. Redistributions in binary form must reproduce the above copyright
++notice, this list of conditions and the following disclaimer in
++the documentation and/or other materials provided with the
++distribution.
++3. Neither the name of the OpenBLAS project nor the names of
++its contributors may be used to endorse or promote products
++derived from this software without specific prior written permission.
++THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
++AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
++IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
++ARE DISCLAIMED. IN NO EVENT SHALL THE OPENBLAS PROJECT OR CONTRIBUTORS BE
++LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
++DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
++SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
++CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
++OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE
++USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
++ *****************************************************************************/
++
++#include "common.h"
++
++#ifndef HAVE_KERNEL_8
++#include <altivec.h> 
++static void cdot_kernel_8(BLASLONG n, FLOAT *x, FLOAT *y, float *dot)
++{
++    __vector unsigned char swap_mask = { 4,5,6,7,0,1,2,3, 12,13,14,15, 8,9,10,11};
++    register __vector float *vy = (__vector float *) y;
++    register __vector float *vx = (__vector float *) x;
++    BLASLONG i = 0;
++    register __vector float vd_0  = { 0 };
++    register __vector float vd_1  = { 0 };
++    register __vector float vd_2  = { 0 };
++    register __vector float vd_3  = { 0 };
++    register __vector float vdd_0 = { 0 };
++    register __vector float vdd_1 = { 0 };
++    register __vector float vdd_2 = { 0 };
++    register __vector float vdd_3 = { 0 };
++    for (; i < n/2; i += 4) {
++
++        register __vector float vyy_0 ;
++        register __vector float vyy_1 ;
++        register __vector float vyy_2 ;
++        register __vector float vyy_3 ;
++
++        register __vector float vy_0 = vy[i];
++        register __vector float vy_1 = vy[i + 1];
++        register __vector float vy_2 = vy[i + 2];
++        register __vector float vy_3 = vy[i + 3]; 
++        register __vector float vx_0= vx[i];
++        register __vector float vx_1 = vx[i + 1];
++        register __vector float vx_2 = vx[i + 2];
++        register __vector float vx_3 = vx[i + 3]; 
++        vyy_0 = vec_perm(vy_0, vy_0, swap_mask);
++        vyy_1 = vec_perm(vy_1, vy_1, swap_mask);
++        vyy_2 = vec_perm(vy_2, vy_2, swap_mask);
++        vyy_3 = vec_perm(vy_3, vy_3, swap_mask);  
++
++        vd_0 += vx_0 * vy_0;
++        vd_1 += vx_1 * vy_1;
++        vd_2 += vx_2 * vy_2;
++        vd_3 += vx_3 * vy_3;
++
++        vdd_0 += vx_0 * vyy_0;
++        vdd_1 += vx_1 * vyy_1;
++        vdd_2 += vx_2 * vyy_2;
++        vdd_3 += vx_3 * vyy_3;       
++       
++
++    }
++    //aggregate
++    vd_0 = vd_0 + vd_1 +vd_2 +vd_3;
++    vdd_0= vdd_0 + vdd_1 +vdd_2 +vdd_3; 
++     //reverse and aggregate 
++    vd_1=vec_xxpermdi(vd_0,vd_0,2)  ;
++    vdd_1=vec_xxpermdi(vdd_0,vdd_0,2);
++    vd_2=vd_0+vd_1;
++    vdd_2=vdd_0+vdd_1;
++
++    dot[0]=vd_2[0];
++    dot[1]=vd_2[1];
++    dot[2]=vdd_2[0];
++    dot[3]=vdd_2[1];
++ 
++}
++#endif
++ 
++
++OPENBLAS_COMPLEX_FLOAT CNAME(BLASLONG n, FLOAT *x, BLASLONG inc_x, FLOAT *y, BLASLONG inc_y) {
++    BLASLONG i = 0;
++    BLASLONG ix=0, iy=0;
++    OPENBLAS_COMPLEX_FLOAT result;
++    FLOAT dot[4] __attribute__ ((aligned(16))) = {0.0, 0.0, 0.0, 0.0};
++
++    if (n <= 0) {
++        CREAL(result) = 0.0;
++        CIMAG(result) = 0.0;
++        return (result);
++
++    }
++
++    if ((inc_x == 1) && (inc_y == 1)) {
++
++        BLASLONG n1 = n & -8;
++        BLASLONG j=0; 
++
++        if (n1){
++            cdot_kernel_8(n1, x, y, dot);
++            i = n1;
++            j = n1 <<1;
++        }
++ 
++
++        while (i < n) {
++
++            dot[0] += x[j] * y[j];
++            dot[1] += x[j + 1] * y[j + 1];
++            dot[2] += x[j] * y[j + 1];
++            dot[3] += x[j + 1] * y[j];
++
++            j += 2;
++            i++;
++
++        }
++
++
++    } else {
++        i = 0;
++        ix = 0;
++        iy = 0;
++        inc_x <<= 1;
++        inc_y <<= 1;
++        while (i < n) {
++
++            dot[0] += x[ix] * y[iy];
++            dot[1] += x[ix + 1] * y[iy + 1];
++            dot[2] += x[ix] * y[iy + 1];
++            dot[3] += x[ix + 1] * y[iy];
++
++            ix += inc_x;
++            iy += inc_y;
++            i++;
++
++        }
++    }
++
++#if !defined(CONJ)
++    CREAL(result) = dot[0] - dot[1];
++    CIMAG(result) = dot[2] + dot[3];
++#else
++    CREAL(result) = dot[0] + dot[1];
++    CIMAG(result) = dot[2] - dot[3];
++
++#endif
++
++    return (result);
++
++}
+diff --git a/kernel/power/crot.c b/kernel/power/crot.c
+new file mode 100644
+index 0000000..40e350b
+--- /dev/null
++++ b/kernel/power/crot.c
+@@ -0,0 +1,231 @@
++/***************************************************************************
++Copyright (c) 2013-2018, The OpenBLAS Project
++All rights reserved.
++Redistribution and use in source and binary forms, with or without
++modification, are permitted provided that the following conditions are
++met:
++1. Redistributions of source code must retain the above copyright
++notice, this list of conditions and the following disclaimer.
++2. Redistributions in binary form must reproduce the above copyright
++notice, this list of conditions and the following disclaimer in
++the documentation and/or other materials provided with the
++distribution.
++3. Neither the name of the OpenBLAS project nor the names of
++its contributors may be used to endorse or promote products
++derived from this software without specific prior written permission.
++THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
++AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
++IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
++ARE DISCLAIMED. IN NO EVENT SHALL THE OPENBLAS PROJECT OR CONTRIBUTORS BE
++LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
++DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
++SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
++CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
++OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE
++USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
++*****************************************************************************/
++ 
++#include "common.h"
++ 
++#if defined(POWER8)
++
++static void crot_kernel_8 (long n, float *x, float *y, float c, float s)
++{
++  __vector float t0;
++  __vector float t1;
++  __vector float t2;
++  __vector float t3;
++  __vector float t4;
++  __vector float t5;
++  __vector float t6;
++  __vector float t7;
++  __asm__
++    (
++       "xscvdpspn   36, %x[cos]               \n\t" // load c to all words
++       "xxspltw     36, 36, 0                 \n\t" 
++       "xscvdpspn   37, %x[sin]               \n\t" // load s to all words
++       "xxspltw     37, 37, 0                 \n\t" 
++       "lxvd2x      32, 0, %[x_ptr]           \n\t" // load x
++       "lxvd2x      33, %[i16], %[x_ptr]      \n\t" 
++       "lxvd2x      34, %[i32], %[x_ptr]      \n\t" 
++       "lxvd2x      35, %[i48], %[x_ptr]      \n\t" 
++       "lxvd2x      48, 0, %[y_ptr]           \n\t" // load y
++       "lxvd2x      49, %[i16], %[y_ptr]      \n\t" 
++       "lxvd2x      50, %[i32], %[y_ptr]      \n\t" 
++       "lxvd2x      51, %[i48], %[y_ptr]      \n\t" 
++       "addi        %[x_ptr], %[x_ptr], 64    \n\t" 
++       "addi        %[y_ptr], %[y_ptr], 64    \n\t" 
++       "addic.      %[temp_n], %[temp_n], -8  \n\t" 
++       "ble         2f                        \n\t" 
++       ".p2align    5                         \n\t" 
++       "1:                                    \n\t" 
++       "xvmulsp     40, 32, 36                \n\t" // c * x
++       "xvmulsp     41, 33, 36                \n\t" 
++       "xvmulsp     42, 34, 36                \n\t" 
++       "xvmulsp     43, 35, 36                \n\t" 
++       "xvmulsp     %x[x0], 48, 36            \n\t" // c * y
++       "xvmulsp     %x[x2], 49, 36            \n\t" 
++       "xvmulsp     %x[x1], 50, 36            \n\t" 
++       "xvmulsp     %x[x3], 51, 36            \n\t" 
++       "xvmulsp     44, 32, 37                \n\t" // s * x
++       "xvmulsp     45, 33, 37                \n\t" 
++       "lxvd2x      32, 0, %[x_ptr]           \n\t" // load x
++       "lxvd2x      33, %[i16], %[x_ptr]      \n\t" 
++       "xvmulsp     46, 34, 37                \n\t" 
++       "xvmulsp     47, 35, 37                \n\t" 
++       "lxvd2x      34, %[i32], %[x_ptr]      \n\t" 
++       "lxvd2x      35, %[i48], %[x_ptr]      \n\t" 
++       "xvmulsp     %x[x4], 48, 37            \n\t" // s * y
++       "xvmulsp     %x[x5], 49, 37            \n\t" 
++       "lxvd2x      48, 0, %[y_ptr]           \n\t" // load y
++       "lxvd2x      49, %[i16], %[y_ptr]      \n\t" 
++       "xvmulsp     %x[x6], 50, 37            \n\t" 
++       "xvmulsp     %x[x7], 51, 37            \n\t" 
++       "lxvd2x      50, %[i32], %[y_ptr]      \n\t" 
++       "lxvd2x      51, %[i48], %[y_ptr]      \n\t" 
++       "xvaddsp     40, 40, %x[x4]            \n\t" // c * x + s * y
++       "xvaddsp     41, 41, %x[x5]            \n\t" // c * x + s * y
++       "addi        %[x_ptr], %[x_ptr], -64   \n\t" 
++       "addi        %[y_ptr], %[y_ptr], -64   \n\t" 
++       "xvaddsp     42, 42, %x[x6]            \n\t" // c * x + s * y
++       "xvaddsp     43, 43, %x[x7]            \n\t" // c * x + s * y
++       "xvsubsp     %x[x0], %x[x0], 44        \n\t" // c * y - s * x
++       "xvsubsp     %x[x2], %x[x2], 45        \n\t" // c * y - s * x
++       "xvsubsp     %x[x1], %x[x1], 46        \n\t" // c * y - s * x
++       "xvsubsp     %x[x3], %x[x3], 47        \n\t" // c * y - s * x
++       "stxvd2x     40, 0, %[x_ptr]           \n\t" // store x
++       "stxvd2x     41, %[i16], %[x_ptr]      \n\t" 
++       "stxvd2x     42, %[i32], %[x_ptr]      \n\t" 
++       "stxvd2x     43, %[i48], %[x_ptr]      \n\t" 
++       "stxvd2x     %x[x0], 0, %[y_ptr]       \n\t" // store y
++       "stxvd2x     %x[x2], %[i16], %[y_ptr]  \n\t" 
++       "stxvd2x     %x[x1], %[i32], %[y_ptr]  \n\t" 
++       "stxvd2x     %x[x3], %[i48], %[y_ptr]  \n\t" 
++       "addi        %[x_ptr], %[x_ptr], 128   \n\t" 
++       "addi        %[y_ptr], %[y_ptr], 128   \n\t" 
++       "addic.      %[temp_n], %[temp_n], -8  \n\t" 
++       "bgt         1b                        \n\t" 
++       "2:                                    \n\t" 
++       "xvmulsp     40, 32, 36                \n\t" // c * x
++       "xvmulsp     41, 33, 36                \n\t" 
++       "xvmulsp     42, 34, 36                \n\t" 
++       "xvmulsp     43, 35, 36                \n\t" 
++       "xvmulsp     %x[x0], 48, 36            \n\t" // c * y
++       "xvmulsp     %x[x2], 49, 36            \n\t" 
++       "xvmulsp     %x[x1], 50, 36            \n\t" 
++       "xvmulsp     %x[x3], 51, 36            \n\t" 
++       "xvmulsp     44, 32, 37                \n\t" // s * x
++       "xvmulsp     45, 33, 37                \n\t" 
++       "xvmulsp     46, 34, 37                \n\t" 
++       "xvmulsp     47, 35, 37                \n\t" 
++       "xvmulsp     %x[x4], 48, 37            \n\t" // s * y
++       "xvmulsp     %x[x5], 49, 37            \n\t" 
++       "xvmulsp     %x[x6], 50, 37            \n\t" 
++       "xvmulsp     %x[x7], 51, 37            \n\t" 
++       "addi        %[x_ptr], %[x_ptr], -64   \n\t" 
++       "addi        %[y_ptr], %[y_ptr], -64   \n\t" 
++       "xvaddsp     40, 40, %x[x4]            \n\t" // c * x + s * y
++       "xvaddsp     41, 41, %x[x5]            \n\t" // c * x + s * y
++       "xvaddsp     42, 42, %x[x6]            \n\t" // c * x + s * y
++       "xvaddsp     43, 43, %x[x7]            \n\t" // c * x + s * y
++       "xvsubsp     %x[x0], %x[x0], 44        \n\t" // c * y - s * x
++       "xvsubsp     %x[x2], %x[x2], 45        \n\t" // c * y - s * x
++       "xvsubsp     %x[x1], %x[x1], 46        \n\t" // c * y - s * x
++       "xvsubsp     %x[x3], %x[x3], 47        \n\t" // c * y - s * x
++       "stxvd2x     40, 0, %[x_ptr]           \n\t" // store x
++       "stxvd2x     41, %[i16], %[x_ptr]      \n\t" 
++       "stxvd2x     42, %[i32], %[x_ptr]      \n\t" 
++       "stxvd2x     43, %[i48], %[x_ptr]      \n\t" 
++       "stxvd2x     %x[x0], 0, %[y_ptr]       \n\t" // store y
++       "stxvd2x     %x[x2], %[i16], %[y_ptr]  \n\t" 
++       "stxvd2x     %x[x1], %[i32], %[y_ptr]  \n\t" 
++       "stxvd2x     %x[x3], %[i48], %[y_ptr]  "
++     :
++       [mem_x]  "+m"  (*(float (*)[2*n])x),
++       [mem_y]  "+m"  (*(float (*)[2*n])y),
++       [temp_n] "+r"  (n),
++       [x_ptr]  "+&b" (x),
++       [y_ptr]  "+&b" (y),
++       [x0]     "=wa" (t0),
++       [x1]     "=wa" (t2),
++       [x2]     "=wa" (t1),
++       [x3]     "=wa" (t3),
++       [x4]     "=wa" (t4),
++       [x5]     "=wa" (t5),
++       [x6]     "=wa" (t6),
++       [x7]     "=wa" (t7)     
++     : 
++       [cos]    "f"   (c),
++       [sin]    "f"   (s),
++       [i16]    "b"   (16),
++       [i32]    "b"   (32),
++       [i48]    "b"   (48)     
++     :
++       "cr0",
++       "vs32","vs33","vs34","vs35","vs36","vs37",
++       "vs40","vs41","vs42","vs43","vs44","vs45","vs46","vs47",
++       "vs48","vs49","vs50","vs51"
++     );
++}
++ 
++#endif
++
++
++int CNAME(BLASLONG n, FLOAT *x, BLASLONG inc_x, FLOAT *y, BLASLONG inc_y, FLOAT c, FLOAT s)
++{
++   BLASLONG i=0;
++    BLASLONG ix=0,iy=0;
++    FLOAT temp[2];
++    BLASLONG inc_x2;
++    BLASLONG inc_y2;
++
++    if ( n <= 0     )  return(0); 
++
++    if ( (inc_x == 1) && (inc_y == 1) )
++    {
++
++        BLASLONG n1 = n & -8; 
++        if ( n1 > 0 )
++        { 
++            crot_kernel_8(n1, x, y, c, s);
++            i=n1; 
++            ix=2*n1; 
++        }
++
++         while(i < n)
++           {
++                temp[0]   = c*x[ix]   + s*y[ix] ;
++                temp[1]   = c*x[ix+1] + s*y[ix+1] ;
++                y[ix]     = c*y[ix]   - s*x[ix] ;
++                y[ix+1]   = c*y[ix+1] - s*x[ix+1] ;
++                x[ix]     = temp[0] ;
++                x[ix+1]   = temp[1] ;
++
++                ix += 2 ; 
++                i++ ;
++
++            }
++
++    }
++    else
++    {
++        inc_x2 = 2 * inc_x ;
++        inc_y2 = 2 * inc_y ;
++        while(i < n)
++        {
++            temp[0]   = c*x[ix]   + s*y[iy] ;
++            temp[1]   = c*x[ix+1] + s*y[iy+1] ;
++            y[iy]     = c*y[iy]   - s*x[ix] ;
++            y[iy+1]   = c*y[iy+1] - s*x[ix+1] ;
++            x[ix]     = temp[0] ;
++            x[ix+1]   = temp[1] ;
++
++            ix += inc_x2 ;
++            iy += inc_y2 ;
++            i++ ;
++
++        }
++    }
++	return(0);
++}
++
+diff --git a/kernel/power/icamax.c b/kernel/power/icamax.c
+new file mode 100644
+index 0000000..aa0531d
+--- /dev/null
++++ b/kernel/power/icamax.c
+@@ -0,0 +1,261 @@
++/***************************************************************************
++Copyright (c) 2019, The OpenBLAS Project
++All rights reserved.
++Redistribution and use in source and binary forms, with or without
++modification, are permitted provided that the following conditions are
++met:
++1. Redistributions of source code must retain the above copyright
++notice, this list of conditions and the following disclaimer.
++2. Redistributions in binary form must reproduce the above copyright
++notice, this list of conditions and the following disclaimer in
++the documentation and/or other materials provided with the
++distribution.
++3. Neither the name of the OpenBLAS project nor the names of
++its contributors may be used to endorse or promote products
++derived from this software without specific prior written permission.
++THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
++AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
++IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
++ARE DISCLAIMED. IN NO EVENT SHALL THE OPENBLAS PROJECT OR CONTRIBUTORS BE
++LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
++DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
++SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
++CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
++OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE
++USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
++*****************************************************************************/
++ 
++
++#include "common.h"
++#include <math.h>
++#include <altivec.h>
++#if defined(DOUBLE)
++    #define ABS fabs
++#else
++    #define ABS fabsf
++#endif
++#define CABS1(x,i)    ABS(x[i])+ABS(x[i+1])
++
++
++
++ 
++/**
++ * Find  maximum index 
++ * Warning: requirements n>0  and n % 32 == 0
++ * @param n     
++ * @param x     pointer to the vector
++ * @param maxf  (out) maximum absolute value .( only for output )
++ * @return  index 
++ */
++static BLASLONG   ciamax_kernel_32(BLASLONG n, FLOAT *x, FLOAT *maxf) { 
++
++    BLASLONG index;
++    BLASLONG i;
++    register __vector unsigned int static_index0 = {0,1,2,3};
++    register __vector unsigned int temp0 = {4,4,4, 4}; //temporary vector register
++    register __vector unsigned int temp1=  temp0<<1;  //{8,8,8,8}
++    register __vector unsigned int static_index1=static_index0 +temp0;//{4,5,6,7};
++    register __vector unsigned int static_index2=static_index0 +temp1;//{8,9,10,11};
++    register __vector unsigned int static_index3=static_index1 +temp1; //{12,13,14,15};
++    temp0=vec_xor(temp0,temp0);
++    temp1=temp1 <<1 ; //{16,16,16,16}
++    register __vector unsigned int temp_add=temp1 <<1; //{32,32,32,32}
++    register __vector unsigned int quadruple_indices=temp0;//{0,0,0,0}
++    register __vector float quadruple_values={0,0,0,0};
++
++    register __vector float * v_ptrx=(__vector float *)x;
++    register __vector unsigned char real_pack_mask = { 0,1,2,3,8,9,10,11,16,17,18,19, 24,25,26,27}; 
++    register __vector unsigned char image_pack_mask=  {4, 5, 6, 7, 12, 13, 14, 15, 20, 21, 22, 23, 28, 29, 30, 31}; 
++    for(; i<n; i+=32){
++       //absolute temporary complex vectors
++       register __vector float v0=vec_abs(v_ptrx[0]);
++       register __vector float v1=vec_abs(v_ptrx[1]);
++       register __vector float v2=vec_abs(v_ptrx[2]);
++       register __vector float v3=vec_abs(v_ptrx[3]);
++       register __vector float v4=vec_abs(v_ptrx[4]);
++       register __vector float v5=vec_abs(v_ptrx[5]);
++       register __vector float v6=vec_abs(v_ptrx[6]);       
++       register __vector float v7=vec_abs(v_ptrx[7]);
++
++       //pack complex real and imaginary parts together to sum real+image
++       register __vector float t1=vec_perm(v0,v1,real_pack_mask);
++       register __vector float ti=vec_perm(v0,v1,image_pack_mask);      
++       v0=t1+ti; //sum quadruple real with quadruple image
++       register __vector float t2=vec_perm(v2,v3,real_pack_mask);
++       register __vector float ti2=vec_perm(v2,v3,image_pack_mask); 
++       v1=t2+ti2;
++       t1=vec_perm(v4,v5,real_pack_mask);
++       ti=vec_perm(v4,v5,image_pack_mask);      
++       v2=t1+ti; //sum
++       t2=vec_perm(v6,v7,real_pack_mask);
++       ti2=vec_perm(v6,v7,image_pack_mask); 
++       v3=t2+ti2;
++       // now we have 16 summed elements . lets compare them
++       v_ptrx+=8;
++       register __vector bool int r1=vec_cmpgt(v1,v0);
++       register __vector bool int r2=vec_cmpgt(v3,v2);
++       register __vector unsigned int ind2= vec_sel(static_index0,static_index1,r1);
++       v0=vec_sel(v0,v1,r1); 
++       register __vector unsigned int ind3= vec_sel(static_index2,static_index3,r2);
++       v1=vec_sel(v2,v3,r2);
++       //final cmp and select index and value for first 16 values
++       r1=vec_cmpgt(v1,v0);
++       register __vector unsigned int indf0 = vec_sel(ind2,ind3,r1);
++       register __vector float vf0= vec_sel(v0,v1,r1); 
++
++       //absolute temporary complex vectors
++       v0=vec_abs(v_ptrx[0]);
++       v1=vec_abs(v_ptrx[1]);
++       v2=vec_abs(v_ptrx[2]);
++       v3=vec_abs(v_ptrx[3]);
++       v4=vec_abs(v_ptrx[4]);
++       v5=vec_abs(v_ptrx[5]);
++       v6=vec_abs(v_ptrx[6]);       
++       v7=vec_abs(v_ptrx[7]);
++
++       //pack complex real and imaginary parts together to sum real+image
++       t1=vec_perm(v0,v1,real_pack_mask);
++       ti=vec_perm(v0,v1,image_pack_mask);      
++       v0=t1+ti; //sum quadruple real with quadruple image
++       t2=vec_perm(v2,v3,real_pack_mask);
++       ti2=vec_perm(v2,v3,image_pack_mask); 
++       v1=t2+ti2;
++       t1=vec_perm(v4,v5,real_pack_mask);
++       ti=vec_perm(v4,v5,image_pack_mask);      
++       v2=t1+ti; //sum
++       t2=vec_perm(v6,v7,real_pack_mask);
++       ti2=vec_perm(v6,v7,image_pack_mask); 
++       v3=t2+ti2;
++       // now we have 16 summed elements {from 16 to 31} . lets compare them
++       v_ptrx+=8;
++       r1=vec_cmpgt(v1,v0);
++       r2=vec_cmpgt(v3,v2);
++       ind2= vec_sel(static_index0,static_index1,r1);
++       v0=vec_sel(v0,v1,r1); 
++       ind3= vec_sel(static_index2,static_index3,r2);
++       v1=vec_sel(v2,v3,r2);
++       //final cmp and select index and value for the second 16 values
++       r1=vec_cmpgt(v1,v0);
++       register __vector unsigned int indv0 = vec_sel(ind2,ind3,r1);
++       register __vector float vv0= vec_sel(v0,v1,r1); 
++       indv0+=temp1; //make index from 16->31
++
++       //find final quadruple from 32 elements
++       r2=vec_cmpgt(vv0,vf0);
++       ind2 = vec_sel( indf0,indv0,r2);
++       vv0= vec_sel(vf0,vv0,r2);       
++       //get asbolute index
++       ind2+=temp0;
++       //compare with old quadruple and update 
++       r1=vec_cmpgt(vv0,quadruple_values);
++       quadruple_indices = vec_sel( quadruple_indices,ind2,r1);
++       quadruple_values= vec_sel(quadruple_values,vv0,r1);      
++
++       temp0+=temp_add;     
++    }
++
++    //now we have to chose from 4 values and 4 different indices
++    // we will compare pairwise if pairs are exactly the same we will choose minimum between index
++    // otherwise we will assign index of the maximum value
++    float a1,a2,a3,a4;
++    unsigned int i1,i2,i3,i4;
++    a1=vec_extract(quadruple_values,0);
++    a2=vec_extract(quadruple_values,1);
++    a3=vec_extract(quadruple_values,2);
++    a4=vec_extract(quadruple_values,3);
++    i1=vec_extract(quadruple_indices,0);
++    i2=vec_extract(quadruple_indices,1);
++    i3=vec_extract(quadruple_indices,2);
++    i4=vec_extract(quadruple_indices,3);
++    if(a1==a2){
++      index=i1>i2?i2:i1;
++    }else if(a2>a1){
++      index=i2;
++      a1=a2;
++    }else{
++       index= i1;
++    }
++
++    if(a4==a3){
++      i1=i3>i4?i4:i3;
++    }else if(a4>a3){
++      i1=i4;
++      a3=a4;
++    }else{
++       i1= i3;
++    }
++
++    if(a1==a3){
++       index=i1>index?index:i1;
++       *maxf=a1; 
++    }else if(a3>a1){
++       index=i1;
++       *maxf=a3;
++    }else{ 
++        *maxf=a1;
++    }
++    return index; 
++
++}
++ 
++  
++
++ 
++ 
++
++BLASLONG CNAME(BLASLONG n, FLOAT *x, BLASLONG inc_x)
++{
++    BLASLONG i = 0;
++    BLASLONG ix = 0;
++    FLOAT maxf = 0;
++    BLASLONG max = 0;
++    BLASLONG inc_x2;
++
++    if (n <= 0 || inc_x <= 0) return(max);
++     
++    if (inc_x == 1) {
++
++      BLASLONG n1 = n & -32;
++      if (n1 > 0) {
++
++            max = ciamax_kernel_32(n1, x, &maxf); 
++            i = n1;
++            ix = n1 << 1;
++      }
++
++      while(i < n)
++    {
++        if( CABS1(x,ix) > maxf )
++        {
++            max = i;
++            maxf = CABS1(x,ix);
++        }
++        ix += 2;
++        i++;
++    }
++        return (max + 1);
++
++    } else {
++ 
++      inc_x2 = 2 * inc_x;
++
++    maxf = CABS1(x,0);
++    ix += inc_x2;
++    i++;
++
++    while(i < n)
++    {
++        if( CABS1(x,ix) > maxf )
++        {
++            max = i;
++            maxf = CABS1(x,ix);
++        }
++        ix += inc_x2;
++        i++;
++    }
++        return (max + 1);
++    }
++ 
++}
++
++
+diff --git a/kernel/power/icamin.c b/kernel/power/icamin.c
+new file mode 100644
+index 0000000..36432c9
+--- /dev/null
++++ b/kernel/power/icamin.c
+@@ -0,0 +1,266 @@
++/***************************************************************************
++Copyright (c) 2019, The OpenBLAS Project
++All rights reserved.
++Redistribution and use in source and binary forms, with or without
++modification, are permitted provided that the following conditions are
++met:
++1. Redistributions of source code must retain the above copyright
++notice, this list of conditions and the following disclaimer.
++2. Redistributions in binary form must reproduce the above copyright
++notice, this list of conditions and the following disclaimer in
++the documentation and/or other materials provided with the
++distribution.
++3. Neither the name of the OpenBLAS project nor the names of
++its contributors may be used to endorse or promote products
++derived from this software without specific prior written permission.
++THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
++AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
++IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
++ARE DISCLAIMED. IN NO EVENT SHALL THE OPENBLAS PROJECT OR CONTRIBUTORS BE
++LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
++DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
++SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
++CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
++OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE
++USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
++*****************************************************************************/
++ 
++
++#include "common.h"
++#include <math.h>
++#include <altivec.h>
++#if defined(DOUBLE)
++    #define ABS fabs
++#else
++    #define ABS fabsf
++#endif
++#define CABS1(x,i)    ABS(x[i])+ABS(x[i+1])
++
++
++
++ 
++/**
++ * Find  minimum index 
++ * Warning: requirements n>0  and n % 32 == 0
++ * @param n     
++ * @param x     pointer to the vector
++ * @param minf  (out) minimum absolute value .( only for output )
++ * @return  index 
++ */
++static BLASLONG   ciamin_kernel_32(BLASLONG n, FLOAT *x, FLOAT *minf) { 
++
++    BLASLONG index;
++    BLASLONG i;
++    register __vector unsigned int static_index0 = {0,1,2,3};
++    register __vector unsigned int temp0 = {4,4,4, 4}; //temporary vector register
++    register __vector unsigned int temp1=  temp0<<1;  //{8,8,8,8}
++    register __vector unsigned int static_index1=static_index0 +temp0;//{4,5,6,7};
++    register __vector unsigned int static_index2=static_index0 +temp1;//{8,9,10,11};
++    register __vector unsigned int static_index3=static_index1 +temp1; //{12,13,14,15};
++    temp0=vec_xor(temp0,temp0);
++    temp1=temp1 <<1 ; //{16,16,16,16}
++    register __vector unsigned int temp_add=temp1 <<1; //{32,32,32,32}
++    register __vector unsigned int quadruple_indices=temp0;//{0,0,0,0}
++    float first_min=CABS1(x,0);
++    register __vector float quadruple_values={first_min,first_min,first_min,first_min};
++
++    register __vector float * v_ptrx=(__vector float *)x;
++    register __vector unsigned char real_pack_mask = { 0,1,2,3,8,9,10,11,16,17,18,19, 24,25,26,27}; 
++    register __vector unsigned char image_pack_mask=  {4, 5, 6, 7, 12, 13, 14, 15, 20, 21, 22, 23, 28, 29, 30, 31}; 
++    for(; i<n; i+=32){
++       //absolute temporary complex vectors
++       register __vector float v0=vec_abs(v_ptrx[0]);
++       register __vector float v1=vec_abs(v_ptrx[1]);
++       register __vector float v2=vec_abs(v_ptrx[2]);
++       register __vector float v3=vec_abs(v_ptrx[3]);
++       register __vector float v4=vec_abs(v_ptrx[4]);
++       register __vector float v5=vec_abs(v_ptrx[5]);
++       register __vector float v6=vec_abs(v_ptrx[6]);       
++       register __vector float v7=vec_abs(v_ptrx[7]);
++
++       //pack complex real and imaginary parts together to sum real+image
++       register __vector float t1=vec_perm(v0,v1,real_pack_mask);
++       register __vector float ti=vec_perm(v0,v1,image_pack_mask);      
++       v0=t1+ti; //sum quadruple real with quadruple image
++       register __vector float t2=vec_perm(v2,v3,real_pack_mask);
++       register __vector float ti2=vec_perm(v2,v3,image_pack_mask); 
++       v1=t2+ti2;
++       t1=vec_perm(v4,v5,real_pack_mask);
++       ti=vec_perm(v4,v5,image_pack_mask);      
++       v2=t1+ti; //sum
++       t2=vec_perm(v6,v7,real_pack_mask);
++       ti2=vec_perm(v6,v7,image_pack_mask); 
++       v3=t2+ti2;
++       // now we have 16 summed elements . lets compare them
++       v_ptrx+=8;
++       register __vector bool int r1=vec_cmpgt(v0,v1);
++       register __vector bool int r2=vec_cmpgt(v2,v3);
++       register __vector unsigned int ind2= vec_sel(static_index0,static_index1,r1);
++       v0=vec_sel(v0,v1,r1); 
++       register __vector unsigned int ind3= vec_sel(static_index2,static_index3,r2);
++       v1=vec_sel(v2,v3,r2);
++       //final cmp and select index and value for first 16 values
++       r1=vec_cmpgt(v0,v1);
++       register __vector unsigned int indf0 = vec_sel(ind2,ind3,r1);
++       register __vector float vf0= vec_sel(v0,v1,r1); 
++
++       //absolute temporary complex vectors
++       v0=vec_abs(v_ptrx[0]);
++       v1=vec_abs(v_ptrx[1]);
++       v2=vec_abs(v_ptrx[2]);
++       v3=vec_abs(v_ptrx[3]);
++       v4=vec_abs(v_ptrx[4]);
++       v5=vec_abs(v_ptrx[5]);
++       v6=vec_abs(v_ptrx[6]);       
++       v7=vec_abs(v_ptrx[7]);
++
++       //pack complex real and imaginary parts together to sum real+image
++       t1=vec_perm(v0,v1,real_pack_mask);
++       ti=vec_perm(v0,v1,image_pack_mask);      
++       v0=t1+ti; //sum quadruple real with quadruple image
++       t2=vec_perm(v2,v3,real_pack_mask);
++       ti2=vec_perm(v2,v3,image_pack_mask); 
++       v1=t2+ti2;
++       t1=vec_perm(v4,v5,real_pack_mask);
++       ti=vec_perm(v4,v5,image_pack_mask);      
++       v2=t1+ti; //sum
++       t2=vec_perm(v6,v7,real_pack_mask);
++       ti2=vec_perm(v6,v7,image_pack_mask); 
++       v3=t2+ti2;
++       // now we have 16 summed elements {from 16 to 31} . lets compare them
++       v_ptrx+=8;
++       r1=vec_cmpgt(v0,v1);
++       r2=vec_cmpgt(v2,v3);
++       ind2= vec_sel(static_index0,static_index1,r1);
++       v0=vec_sel(v0,v1,r1); 
++       ind3= vec_sel(static_index2,static_index3,r2);
++       v1=vec_sel(v2,v3,r2);
++       //final cmp and select index and value for the second 16 values
++       r1=vec_cmpgt(v0,v1);
++       register __vector unsigned int indv0 = vec_sel(ind2,ind3,r1);
++       register __vector float vv0= vec_sel(v0,v1,r1); 
++       indv0+=temp1; //make index from 16->31
++
++       //find final quadruple from 32 elements
++       r2=vec_cmpgt(vf0,vv0);
++       ind2 = vec_sel( indf0,indv0,r2);
++       vv0= vec_sel(vf0,vv0,r2);       
++       //get asbolute index
++       ind2+=temp0;
++       //compare with old quadruple and update 
++       r1=vec_cmpgt(quadruple_values,vv0);
++       quadruple_indices = vec_sel( quadruple_indices,ind2,r1);
++       quadruple_values= vec_sel(quadruple_values,vv0,r1);      
++
++       temp0+=temp_add;     
++    }
++
++ //now we have to chose from 4 values and 4 different indices
++    // we will compare pairwise if pairs are exactly the same we will choose minimum between index
++    // otherwise we will assign index of the minimum value
++    float a1,a2,a3,a4;
++    unsigned int i1,i2,i3,i4;
++    a1=vec_extract(quadruple_values,0);
++    a2=vec_extract(quadruple_values,1);
++    a3=vec_extract(quadruple_values,2);
++    a4=vec_extract(quadruple_values,3);
++    i1=vec_extract(quadruple_indices,0);
++    i2=vec_extract(quadruple_indices,1);
++    i3=vec_extract(quadruple_indices,2);
++    i4=vec_extract(quadruple_indices,3);
++    if(a1==a2){
++       index=i1>i2?i2:i1;
++    }else if(a2<a1){
++      index=i2;
++      a1=a2;
++    }else{
++       index= i1;
++    }
++
++    if(a4==a3){
++      i1=i3>i4?i4:i3;
++    }else if(a4<a3){
++      i1=i4;
++      a3=a4;
++    }else{
++       i1= i3;
++    }
++
++    if(a1==a3){
++      index=i1>index?index:i1;
++       *minf=a1; 
++    }else if(a3<a1){
++       index=i1;
++       *minf=a3;
++    }else{ 
++        *minf=a1;
++    }
++    return index;
++
++}
++ 
++  
++
++ 
++
++ 
++ 
++
++BLASLONG CNAME(BLASLONG n, FLOAT *x, BLASLONG inc_x)
++{
++    BLASLONG i=0;
++    BLASLONG ix=0;
++    FLOAT minf;
++    BLASLONG min=0;
++    BLASLONG inc_x2;
++
++    if (n <= 0 || inc_x <= 0) return(min);
++    
++
++    if (inc_x == 1) {
++        minf = CABS1(x,0); //index will not be incremented
++        BLASLONG n1 = n & -32;
++        if (n1 > 0) {
++
++            min = ciamin_kernel_32(n1, x, &minf);
++            i = n1;
++            ix = n1 << 1;
++        }
++      
++
++        while(i < n)
++        {
++            if( CABS1(x,ix) < minf )
++            {
++                min = i;
++                minf = CABS1(x,ix);
++            }
++            ix += 2;
++            i++;
++        }
++        return (min + 1);
++
++    } else {
++ 
++        inc_x2 = 2 * inc_x;
++
++        minf = CABS1(x,0);
++        ix += inc_x2;
++        i++;
++
++        while(i < n)
++        {
++            if( CABS1(x,ix) < minf )
++            {
++                min = i;
++                minf = CABS1(x,ix);
++            }
++            ix += inc_x2;
++            i++;
++        }
++        return (min + 1);
++    }
++ 
++}
++
++
+diff --git a/kernel/power/idamin.c b/kernel/power/idamin.c
+index f4d1d1b..7fe0f8a 100644
+--- a/kernel/power/idamin.c
++++ b/kernel/power/idamin.c
+@@ -89,10 +89,10 @@ static BLASLONG diamin_kernel_32(BLASLONG n, FLOAT *x, FLOAT *minf) {
+             ".p2align   5            \n\t"
+ 
+             "1: \n\t"
+-            "xvcmpgedp  2,44,45  \n\t "
+-            "xvcmpgedp  3,46,47  \n\t "
+-            "xvcmpgedp  4,48,49  \n\t "
+-            "xvcmpgedp  5,50,51  \n\t"
++            "xvcmpgtdp  2,44,45  \n\t "
++            "xvcmpgtdp  3,46,47  \n\t "
++            "xvcmpgtdp  4,48,49  \n\t "
++            "xvcmpgtdp  5,50,51  \n\t"
+ 
+             "xxsel    32,40,41,2 \n\t"
+             "xxsel     0,44,45,2 \n\t" 
+@@ -103,8 +103,8 @@ static BLASLONG diamin_kernel_32(BLASLONG n, FLOAT *x, FLOAT *minf) {
+             "xxsel    35,42,43,5 \n\t"
+             "xxsel    47,50,51,5 \n\t"
+ 
+-            "xvcmpgedp 2,0, 1     \n\t"
+-            "xvcmpgedp 3, 45,47   \n\t"
++            "xvcmpgtdp 2,0, 1     \n\t"
++            "xvcmpgtdp 3, 45,47   \n\t"
+ 
+             "addi     %[ptr_tmp] ,%[ptr_tmp] , 128 \n\t" 
+     
+@@ -125,7 +125,7 @@ static BLASLONG diamin_kernel_32(BLASLONG n, FLOAT *x, FLOAT *minf) {
+             "lxvd2x  47, %[i48],%[ptr_tmp] \n\t" 
+ 
+             //choose smaller from first and second part
+-            "xvcmpgedp 4, 0,5     \n\t" 
++            "xvcmpgtdp 4, 0,5     \n\t" 
+             "xxsel     3, 0,5,4  \n\t"
+             "xxsel     33,32,34,4  \n\t"
+ 
+@@ -139,7 +139,7 @@ static BLASLONG diamin_kernel_32(BLASLONG n, FLOAT *x, FLOAT *minf) {
+             "lxvd2x  51,%[i112],%[ptr_tmp] \n\t"
+ 
+             //compare with previous to get vec_min_index(v6 | vs38 ) and vec_min_value (vs39)   
+-            "xvcmpgedp 2,39, 3    \n\t"
++            "xvcmpgtdp 2,39, 3    \n\t"
+             "xxsel     39,39,3,2  \n\t"
+             "xxsel     38,38,33,2  \n\t"
+     
+@@ -162,10 +162,10 @@ static BLASLONG diamin_kernel_32(BLASLONG n, FLOAT *x, FLOAT *minf) {
+ //<-----------jump here from first load
+              "2:                  \n\t"
+     
+-            "xvcmpgedp  2,44,45  \n\t "
+-            "xvcmpgedp  3,46,47  \n\t "
+-            "xvcmpgedp  4,48,49  \n\t "
+-            "xvcmpgedp  5,50,51  \n\t"
++            "xvcmpgtdp  2,44,45  \n\t "
++            "xvcmpgtdp  3,46,47  \n\t "
++            "xvcmpgtdp  4,48,49  \n\t "
++            "xvcmpgtdp  5,50,51  \n\t"
+ 
+             "xxsel    32,40,41,2 \n\t"
+             "xxsel     0,44,45,2 \n\t" 
+@@ -176,8 +176,8 @@ static BLASLONG diamin_kernel_32(BLASLONG n, FLOAT *x, FLOAT *minf) {
+             "xxsel    35,42,43,5 \n\t"
+             "xxsel    47,50,51,5 \n\t"
+ 
+-            "xvcmpgedp 2,0, 1     \n\t"
+-            "xvcmpgedp 3, 45,47   \n\t"
++            "xvcmpgtdp 2,0, 1     \n\t"
++            "xvcmpgtdp 3, 45,47   \n\t"
+             "xxsel     32,32,33,2 \n\t"
+             "xxsel       0 ,0,1,2 \n\t"
+             "xxsel     34,34,35,3 \n\t"
+@@ -194,7 +194,7 @@ static BLASLONG diamin_kernel_32(BLASLONG n, FLOAT *x, FLOAT *minf) {
+             "lxvd2x  47, %[i48],%[ptr_tmp] \n\t" 
+ 
+             //choose smaller from first and second part
+-            "xvcmpgedp 4, 0,5     \n\t" 
++            "xvcmpgtdp 4, 0,5     \n\t" 
+             "xxsel     3, 0,5,4  \n\t"
+             "xxsel     33,32,34,4  \n\t"
+ 
+@@ -210,7 +210,7 @@ static BLASLONG diamin_kernel_32(BLASLONG n, FLOAT *x, FLOAT *minf) {
+  
+ 
+             //compare with previous to get vec_min_index(v6 | vs38 ) and vec_min_value (vs39)   
+-            "xvcmpgedp 2,39, 3    \n\t"
++            "xvcmpgtdp 2,39, 3    \n\t"
+             "xxsel     39,39,3,2  \n\t"
+             "xxsel     38,38,33,2  \n\t"
+     
+@@ -238,10 +238,10 @@ static BLASLONG diamin_kernel_32(BLASLONG n, FLOAT *x, FLOAT *minf) {
+ 
+ //==============================================================================
+ 
+-            "xvcmpgedp  2,44,45  \n\t "
+-            "xvcmpgedp  3,46,47  \n\t "
+-            "xvcmpgedp  4,48,49  \n\t "
+-            "xvcmpgedp  5,50,51  \n\t"
++            "xvcmpgtdp  2,44,45  \n\t "
++            "xvcmpgtdp  3,46,47  \n\t "
++            "xvcmpgtdp  4,48,49  \n\t "
++            "xvcmpgtdp  5,50,51  \n\t"
+ 
+             "xxsel    32,40,41,2 \n\t"
+             "xxsel     0,44,45,2 \n\t" 
+@@ -252,8 +252,8 @@ static BLASLONG diamin_kernel_32(BLASLONG n, FLOAT *x, FLOAT *minf) {
+             "xxsel    35,42,43,5 \n\t"
+             "xxsel    47,50,51,5 \n\t"
+ 
+-            "xvcmpgedp 2,0, 1     \n\t"
+-            "xvcmpgedp 3, 45,47   \n\t"
++            "xvcmpgtdp 2,0, 1     \n\t"
++            "xvcmpgtdp 3, 45,47   \n\t"
+   
+     
+             "xxsel     32,32,33,2 \n\t"
+@@ -264,14 +264,14 @@ static BLASLONG diamin_kernel_32(BLASLONG n, FLOAT *x, FLOAT *minf) {
+             // for {second 8 elements } we have to add 8 to each so that it became {from 8 to 16}
+             "vaddudm     2,2,4  \n\t" // vs34=vs34 + vs36{8,8}  
+             //choose smaller from first and second part
+-            "xvcmpgedp 4, 0,5     \n\t" 
++            "xvcmpgtdp 4, 0,5     \n\t" 
+             "xxsel     3, 0,5,4   \n\t"
+             "xxsel     33,32,34,4 \n\t" 
+ 
+             "vaddudm  1,1,5  \n\t"  //  get real index for first smaller   
+ 
+             //compare with previous to get vec_min_index(v6 | vs38 ) and vec_min_value (vs39)   
+-            "xvcmpgedp 2,39, 3    \n\t"
++            "xvcmpgtdp 2,39, 3    \n\t"
+             "xxsel     39,39,3,2  \n\t"
+             "xxsel     38,38,33,2  \n\t"
+ 
+@@ -284,7 +284,7 @@ static BLASLONG diamin_kernel_32(BLASLONG n, FLOAT *x, FLOAT *minf) {
+             //cr6 0 bit set if all true, cr6=4*6+bit_ind=24,0011at CR(BI)==1, at=10 hint that it occurs rarely
+              //0b001110=14
+             "bc 14,24, 3f  \n\t" 
+-            "xvcmpgedp  4,39, 40  \n\t"
++            "xvcmpgtdp  4,39, 40  \n\t"
+             "xxsel    0,39,40,4           \n\t"
+             "xxsel    1,38,32,4  \n\t"
+             "stxsdx    0,0,%[ptr_minf]     \n\t" 
+diff --git a/kernel/power/isamax.c b/kernel/power/isamax.c
+new file mode 100644
+index 0000000..bf1af78
+--- /dev/null
++++ b/kernel/power/isamax.c
+@@ -0,0 +1,288 @@
++/***************************************************************************
++Copyright (c) 2013-2019, The OpenBLAS Project
++All rights reserved.
++Redistribution and use in source and binary forms, with or without
++modification, are permitted provided that the following conditions are
++met:
++1. Redistributions of source code must retain the above copyright
++notice, this list of conditions and the following disclaimer.
++2. Redistributions in binary form must reproduce the above copyright
++notice, this list of conditions and the following disclaimer in
++the documentation and/or other materials provided with the
++distribution.
++3. Neither the name of the OpenBLAS project nor the names of
++its contributors may be used to endorse or promote products
++derived from this software without specific prior written permission.
++THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
++AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
++IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
++ARE DISCLAIMED. IN NO EVENT SHALL THE OPENBLAS PROJECT OR CONTRIBUTORS BE
++LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
++DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
++SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
++CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
++OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE
++USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
++ *****************************************************************************/
++#include "common.h"
++#include <math.h>
++#include <altivec.h>
++
++
++#if defined(DOUBLE)
++    #define ABS fabs
++#else
++    #define ABS fabsf
++#endif
++
++/**
++ * Find  maximum index 
++ * Warning: requirements n>0  and n % 64 == 0
++ * @param n     
++ * @param x     pointer to the vector
++ * @param maxf  (out) maximum absolute value .( only for output )
++ * @return  index 
++ */
++static BLASLONG siamax_kernel_64(BLASLONG n, FLOAT *x, FLOAT *maxf) {
++    BLASLONG index;
++    BLASLONG i=0;
++    register __vector unsigned int static_index0 = {0,1,2,3};
++    register __vector unsigned int temp0 = {4,4,4, 4}; //temporary vector register
++    register __vector unsigned int temp1=  temp0<<1;  //{8,8,8,8}
++    register __vector unsigned int static_index1=static_index0 +temp0;//{4,5,6,7};
++    register __vector unsigned int static_index2=static_index0 +temp1;//{8,9,10,11};
++    register __vector unsigned int static_index3=static_index1 +temp1; //{12,13,14,15};
++    temp0=vec_xor(temp0,temp0);
++    temp1=temp1 <<1 ; //{16,16,16,16}
++    register __vector unsigned int quadruple_indices=temp0;//{0,0,0,0}
++    register __vector float quadruple_values={0,0,0,0};
++    register __vector float * v_ptrx=(__vector float *)x;
++    for(; i<n; i+=64){
++       //absolute temporary vectors
++       register __vector float v0=vec_abs(v_ptrx[0]);
++       register __vector float v1=vec_abs(v_ptrx[1]);
++       register __vector float v2=vec_abs(v_ptrx[2]);
++       register __vector float v3=vec_abs(v_ptrx[3]);
++       register __vector float v4=vec_abs(v_ptrx[4]);
++       register __vector float v5=vec_abs(v_ptrx[5]);
++       register __vector float v6=vec_abs(v_ptrx[6]);       
++       register __vector float v7=vec_abs(v_ptrx[7]);
++       //cmp quadruple pairs
++       register __vector bool int r1=vec_cmpgt(v1,v0);
++       register __vector bool int r2=vec_cmpgt(v3,v2);
++       register __vector bool int r3=vec_cmpgt(v5,v4);
++       register __vector bool int r4=vec_cmpgt(v7,v6);
++      
++       //select
++       register __vector unsigned int ind0_first= vec_sel(static_index0,static_index1,r1);
++       register __vector float vf0= vec_sel(v0,v1,r1);
++
++       register __vector unsigned int ind1= vec_sel(static_index2,static_index3,r2);
++       register __vector float vf1= vec_sel(v2,v3,r2);
++
++       register __vector unsigned int ind2= vec_sel(static_index0,static_index1,r3);
++       v0=vec_sel(v4,v5,r3);
++
++       register __vector unsigned int ind3= vec_sel(static_index2,static_index3,r4);
++       v1=vec_sel(v6,v7,r4);
++
++       // cmp selected
++        r1=vec_cmpgt(vf1,vf0);
++       r2=vec_cmpgt(v1,v0);
++
++       v_ptrx+=8;
++       //select from above 
++       ind0_first= vec_sel(ind0_first,ind1,r1);
++       vf0= vec_sel(vf0,vf1,r1) ;
++
++       ind2= vec_sel(ind2,ind3,r2);
++       vf1= vec_sel(v0,v1,r2);
++
++       //second indices actually should be within [16,31] so ind2+16
++       ind2 +=temp1;
++       
++       //final cmp and select index and value for the first 32 values
++       r1=vec_cmpgt(vf1,vf0);
++       ind0_first = vec_sel(ind0_first,ind2,r1);
++       vf0= vec_sel(vf0,vf1,r1);
++ 
++       ind0_first+=temp0; //get absolute index
++
++       temp0+=temp1;
++       temp0+=temp1; //temp0+32
++       //second part of 32
++       // absolute temporary vectors
++       v0=vec_abs(v_ptrx[0]);
++       v1=vec_abs(v_ptrx[1]);
++       v2=vec_abs(v_ptrx[2]);
++       v3=vec_abs(v_ptrx[3]);
++       v4=vec_abs(v_ptrx[4]);
++       v5=vec_abs(v_ptrx[5]);
++       v6=vec_abs(v_ptrx[6]);       
++       v7=vec_abs(v_ptrx[7]);
++       //cmp quadruple pairs
++       r1=vec_cmpgt(v1,v0);
++       r2=vec_cmpgt(v3,v2);
++       r3=vec_cmpgt(v5,v4);
++       r4=vec_cmpgt(v7,v6);
++       //select
++       register __vector unsigned int ind0_second= vec_sel(static_index0,static_index1,r1);
++       register __vector float vv0= vec_sel(v0,v1,r1);
++
++       ind1= vec_sel(static_index2,static_index3,r2);
++       register __vector float vv1= vec_sel(v2,v3,r2);
++
++       ind2= vec_sel(static_index0,static_index1,r3);
++       v0=vec_sel(v4,v5,r3);
++
++       ind3= vec_sel(static_index2,static_index3,r4);
++       v1=vec_sel(v6,v7,r4);
++
++       // cmp selected
++       r1=vec_cmpgt(vv1,vv0);
++       r2=vec_cmpgt(v1,v0);
++
++       v_ptrx+=8;
++       //select from above 
++       ind0_second= vec_sel(ind0_second,ind1,r1);
++       vv0= vec_sel(vv0,vv1,r1) ;
++
++       ind2= vec_sel(ind2,ind3,r2);
++       vv1= vec_sel(v0,v1,r2) ;  
++
++       //second indices actually should be within [16,31] so ind2+16
++       ind2 +=temp1;
++       
++       //final cmp and select index and value for the second 32 values
++       r1=vec_cmpgt(vv1,vv0);
++       ind0_second = vec_sel(ind0_second,ind2,r1);
++       vv0= vec_sel(vv0,vv1,r1);
++
++       ind0_second+=temp0; //get absolute index
++    
++       //find final quadruple from 64 elements
++       r2=vec_cmpgt(vv0,vf0);
++       ind2 = vec_sel( ind0_first,ind0_second,r2);
++       vv0= vec_sel(vf0,vv0,r2);       
++
++       //compare with old quadruple and update 
++       r3=vec_cmpgt(vv0,quadruple_values);
++       quadruple_indices = vec_sel( quadruple_indices,ind2,r3);
++       quadruple_values= vec_sel(quadruple_values,vv0,r3);      
++
++       temp0+=temp1;
++       temp0+=temp1; //temp0+32
++ 
++    }
++
++    //now we have to chose from 4 values and 4 different indices
++    // we will compare pairwise if pairs are exactly the same we will choose minimum between index
++    // otherwise we will assign index of the maximum value
++    float a1,a2,a3,a4;
++    unsigned int i1,i2,i3,i4;
++    a1=vec_extract(quadruple_values,0);
++    a2=vec_extract(quadruple_values,1);
++    a3=vec_extract(quadruple_values,2);
++    a4=vec_extract(quadruple_values,3);
++    i1=vec_extract(quadruple_indices,0);
++    i2=vec_extract(quadruple_indices,1);
++    i3=vec_extract(quadruple_indices,2);
++    i4=vec_extract(quadruple_indices,3);
++    if(a1==a2){
++      index=i1>i2?i2:i1;
++    }else if(a2>a1){
++      index=i2;
++      a1=a2;
++    }else{
++       index= i1;
++    }
++
++    if(a4==a3){
++      i1=i3>i4?i4:i3;
++    }else if(a4>a3){
++      i1=i4;
++      a3=a4;
++    }else{
++       i1= i3;
++    }
++
++    if(a1==a3){
++       index=i1>index?index:i1;
++       *maxf=a1; 
++    }else if(a3>a1){
++       index=i1;
++       *maxf=a3;
++    }else{ 
++        *maxf=a1;
++    }
++    return index;
++
++}
++
++BLASLONG CNAME(BLASLONG n, FLOAT *x, BLASLONG inc_x) {
++    BLASLONG i = 0;
++    BLASLONG j = 0;
++    FLOAT maxf = 0.0;
++    BLASLONG max = 0;
++
++    if (n <= 0 || inc_x <= 0) return (max);
++
++    if (inc_x == 1) {
++
++        BLASLONG n1 = n & -64;
++        if (n1 > 0) {
++
++            max = siamax_kernel_64(n1, x, &maxf);
++
++            i = n1;
++        }
++
++        while (i < n) {
++            if (ABS(x[i]) > maxf) {
++                max = i;
++                maxf = ABS(x[i]);
++            }
++            i++;
++        }
++        return (max + 1);
++
++    } else {
++
++        BLASLONG n1 = n & -4;
++        while (j < n1) {
++
++            if (ABS(x[i]) > maxf) {
++                max = j;
++                maxf = ABS(x[i]);
++            }
++            if (ABS(x[i + inc_x]) > maxf) {
++                max = j + 1;
++                maxf = ABS(x[i + inc_x]);
++            }
++            if (ABS(x[i + 2 * inc_x]) > maxf) {
++                max = j + 2;
++                maxf = ABS(x[i + 2 * inc_x]);
++            }
++            if (ABS(x[i + 3 * inc_x]) > maxf) {
++                max = j + 3;
++                maxf = ABS(x[i + 3 * inc_x]);
++            }
++
++            i += inc_x * 4;
++
++            j += 4;
++
++        }
++
++
++        while (j < n) {
++            if (ABS(x[i]) > maxf) {
++                max = j;
++                maxf = ABS(x[i]);
++            }
++            i += inc_x;
++            j++;
++        }
++        return (max + 1);
++    }
++}
+diff --git a/kernel/power/isamin.c b/kernel/power/isamin.c
+new file mode 100644
+index 0000000..1c1f0ad
+--- /dev/null
++++ b/kernel/power/isamin.c
+@@ -0,0 +1,288 @@
++/***************************************************************************
++Copyright (c) 2013-2019, The OpenBLAS Project
++All rights reserved.
++Redistribution and use in source and binary forms, with or without
++modification, are permitted provided that the following conditions are
++met:
++1. Redistributions of source code must retain the above copyright
++notice, this list of conditions and the following disclaimer.
++2. Redistributions in binary form must reproduce the above copyright
++notice, this list of conditions and the following disclaimer in
++the documentation and/or other materials provided with the
++distribution.
++3. Neither the name of the OpenBLAS project nor the names of
++its contributors may be used to endorse or promote products
++derived from this software without specific prior written permission.
++THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
++AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
++IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
++ARE DISCLAIMED. IN NO EVENT SHALL THE OPENBLAS PROJECT OR CONTRIBUTORS BE
++LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
++DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
++SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
++CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
++OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE
++USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
++ *****************************************************************************/
++#include "common.h"
++#include <math.h>
++#include <altivec.h>
++#if defined(DOUBLE)
++    #define ABS fabs
++#else
++    #define ABS fabsf
++#endif
++/**
++ * Find  minimum index 
++ * Warning: requirements n>0  and n % 64 == 0
++ * @param n     
++ * @param x     pointer to the vector
++ * @param minf  (out) minimum absolute value .( only for output )
++ * @return  index 
++ */
++static BLASLONG siamin_kernel_64(BLASLONG n, FLOAT *x, FLOAT *minf) {
++    BLASLONG index;
++    BLASLONG i=0;
++    register __vector unsigned int static_index0 = {0,1,2,3};
++    register __vector unsigned int temp0 = {4,4,4, 4}; //temporary vector register
++    register __vector unsigned int temp1=  temp0<<1;  //{8,8,8,8}
++    register __vector unsigned int static_index1=static_index0 +temp0;//{4,5,6,7};
++    register __vector unsigned int static_index2=static_index0 +temp1;//{8,9,10,11};
++    register __vector unsigned int static_index3=static_index1 +temp1; //{12,13,14,15};
++    temp0=vec_xor(temp0,temp0);
++    temp1=temp1 <<1 ; //{16,16,16,16}
++    register __vector unsigned int quadruple_indices=static_index0;//{0,1,2,3};
++    register __vector float * v_ptrx=(__vector float *)x;
++    register __vector float quadruple_values=vec_abs(v_ptrx[0]);
++    for(; i<n; i+=64){
++       //absolute temporary vectors
++       register __vector float v0=vec_abs(v_ptrx[0]);
++       register __vector float v1=vec_abs(v_ptrx[1]);
++       register __vector float v2=vec_abs(v_ptrx[2]);
++       register __vector float v3=vec_abs(v_ptrx[3]);
++       register __vector float v4=vec_abs(v_ptrx[4]);
++       register __vector float v5=vec_abs(v_ptrx[5]);
++       register __vector float v6=vec_abs(v_ptrx[6]);       
++       register __vector float v7=vec_abs(v_ptrx[7]);
++       //cmp quadruple pairs
++       register __vector bool int r1=vec_cmpgt(v0,v1);
++       register __vector bool int r2=vec_cmpgt(v2,v3);
++       register __vector bool int r3=vec_cmpgt(v4,v5);
++       register __vector bool int r4=vec_cmpgt(v6,v7);
++              
++       //select
++       register __vector unsigned int ind0_first= vec_sel(static_index0,static_index1,r1);
++       register __vector float vf0= vec_sel(v0,v1,r1);
++
++       register __vector unsigned int ind1= vec_sel(static_index2,static_index3,r2);
++       register __vector float vf1= vec_sel(v2,v3,r2);
++
++       register __vector unsigned int ind2= vec_sel(static_index0,static_index1,r3);
++       v0=vec_sel(v4,v5,r3);
++
++       register __vector unsigned int ind3= vec_sel(static_index2,static_index3,r4);
++       v1=vec_sel(v6,v7,r4);
++
++       // cmp selected
++       r1=vec_cmpgt(vf0,vf1);
++       r2=vec_cmpgt(v0,v1);
++
++       v_ptrx+=8;
++       //select from above 
++       ind0_first= vec_sel(ind0_first,ind1,r1);
++       vf0= vec_sel(vf0,vf1,r1) ;
++
++       ind2= vec_sel(ind2,ind3,r2);
++       vf1= vec_sel(v0,v1,r2);
++
++       //second indices actually should be within [16,31] so ind2+16
++       ind2 +=temp1;
++       
++       //final cmp and select index and value for the first 32 values
++       r1=vec_cmpgt(vf0,vf1);
++       ind0_first = vec_sel(ind0_first,ind2,r1);
++       vf0= vec_sel(vf0,vf1,r1);
++ 
++       ind0_first+=temp0; //get absolute index
++       
++       temp0+=temp1;
++       temp0+=temp1; //temp0+32
++       //second part of 32
++       // absolute temporary vectors
++       v0=vec_abs(v_ptrx[0]);
++       v1=vec_abs(v_ptrx[1]);
++       v2=vec_abs(v_ptrx[2]);
++       v3=vec_abs(v_ptrx[3]);
++       v4=vec_abs(v_ptrx[4]);
++       v5=vec_abs(v_ptrx[5]);
++       v6=vec_abs(v_ptrx[6]);       
++       v7=vec_abs(v_ptrx[7]);
++       //cmp quadruple pairs
++       r1=vec_cmpgt(v0,v1);
++       r2=vec_cmpgt(v2,v3);
++       r3=vec_cmpgt(v4,v5);
++       r4=vec_cmpgt(v6,v7);
++       //select
++       register __vector unsigned int ind0_second= vec_sel(static_index0,static_index1,r1);
++       register __vector float vv0= vec_sel(v0,v1,r1);
++
++       ind1= vec_sel(static_index2,static_index3,r2);
++       register __vector float vv1= vec_sel(v2,v3,r2);
++
++       ind2= vec_sel(static_index0,static_index1,r3);
++       v0=vec_sel(v4,v5,r3);
++
++       ind3= vec_sel(static_index2,static_index3,r4);
++       v1=vec_sel(v6,v7,r4);
++
++       // cmp selected
++       r1=vec_cmpgt(vv0,vv1);
++       r2=vec_cmpgt(v0,v1);
++
++       v_ptrx+=8;
++       //select from above 
++       ind0_second= vec_sel(ind0_second,ind1,r1);
++       vv0= vec_sel(vv0,vv1,r1) ;
++
++       ind2= vec_sel(ind2,ind3,r2);
++       vv1= vec_sel(v0,v1,r2) ;  
++
++       //second indices actually should be within [16,31] so ind2+16
++       ind2 +=temp1;
++       
++       //final cmp and select index and value for the second 32 values
++       r1=vec_cmpgt(vv0,vv1);
++       ind0_second = vec_sel(ind0_second,ind2,r1);
++       vv0= vec_sel(vv0,vv1,r1);
++
++       ind0_second+=temp0; //get absolute index
++        
++       //find final quadruple from 64 elements
++       r2=vec_cmpgt(vf0,vv0);
++       ind2 = vec_sel( ind0_first,ind0_second,r2);
++       vv0= vec_sel(vf0,vv0,r2);       
++             
++       //compare with old quadruple and update 
++       r3=vec_cmpgt( quadruple_values,vv0);
++       quadruple_indices = vec_sel( quadruple_indices,ind2,r3);
++       quadruple_values= vec_sel(quadruple_values,vv0,r3);      
++            
++       temp0+=temp1;
++       temp0+=temp1; //temp0+32
++       
++      
++    }
++
++    //now we have to chose from 4 values and 4 different indices
++    // we will compare pairwise if pairs are exactly the same we will choose minimum between index
++    // otherwise we will assign index of the minimum value
++    float a1,a2,a3,a4;
++    unsigned int i1,i2,i3,i4;
++    a1=vec_extract(quadruple_values,0);
++    a2=vec_extract(quadruple_values,1);
++    a3=vec_extract(quadruple_values,2);
++    a4=vec_extract(quadruple_values,3);
++    i1=vec_extract(quadruple_indices,0);
++    i2=vec_extract(quadruple_indices,1);
++    i3=vec_extract(quadruple_indices,2);
++    i4=vec_extract(quadruple_indices,3);
++    if(a1==a2){
++       index=i1>i2?i2:i1;
++    }else if(a2<a1){
++      index=i2;
++      a1=a2;
++    }else{
++       index= i1;
++    }
++
++    if(a4==a3){
++      i1=i3>i4?i4:i3;
++    }else if(a4<a3){
++      i1=i4;
++      a3=a4;
++    }else{
++       i1= i3;
++    }
++
++    if(a1==a3){
++      index=i1>index?index:i1;
++       *minf=a1; 
++    }else if(a3<a1){
++       index=i1;
++       *minf=a3;
++    }else{ 
++        *minf=a1;
++    }
++    return index;
++
++}
++
++
++
++
++BLASLONG CNAME(BLASLONG n, FLOAT *x, BLASLONG inc_x) {
++    BLASLONG i = 0;
++    BLASLONG j = 0; 
++    BLASLONG min = 0;
++    FLOAT minf = 0.0;
++    
++    if (n <= 0 || inc_x <= 0) return (min);
++    minf = ABS(x[0]); //index's not incremented
++    if (inc_x == 1) {
++
++        BLASLONG n1 = n & -64;
++        if (n1 > 0) {
++
++            min = siamin_kernel_64(n1, x, &minf);
++            i = n1;
++        }
++
++        while (i < n) {
++            if (ABS(x[i]) < minf) {
++                min = i;
++                minf = ABS(x[i]);
++            }
++            i++;
++        }
++        return (min + 1);
++
++    } else {
++
++        BLASLONG n1 = n & -4;
++        while (j < n1) {
++
++            if (ABS(x[i]) < minf) {
++                min = j;
++                minf = ABS(x[i]);
++            }
++            if (ABS(x[i + inc_x]) < minf) {
++                min = j + 1;
++                minf = ABS(x[i + inc_x]);
++            }
++            if (ABS(x[i + 2 * inc_x]) < minf) {
++                min = j + 2;
++                minf = ABS(x[i + 2 * inc_x]);
++            }
++            if (ABS(x[i + 3 * inc_x]) < minf) {
++                min = j + 3;
++                minf = ABS(x[i + 3 * inc_x]);
++            }
++
++            i += inc_x * 4;
++
++            j += 4;
++
++        }
++
++
++        while (j < n) {
++            if (ABS(x[i]) < minf) {
++                min = j;
++                minf = ABS(x[i]);
++            }
++            i += inc_x;
++            j++;
++        }
++        return (min + 1);
++    }
++}
+diff --git a/kernel/power/izamin.c b/kernel/power/izamin.c
+index 448247f..1ffa3ba 100644
+--- a/kernel/power/izamin.c
++++ b/kernel/power/izamin.c
+@@ -101,8 +101,8 @@ static BLASLONG ziamin_kernel_16_TUNED(BLASLONG n, FLOAT *x, FLOAT *minf) {
+ 
+ 
+ 
+-            "xvcmpgedp  50,46,47  \n\t "
+-            "xvcmpgedp  51,48,49  \n\t "
++            "xvcmpgtdp  50,46,47  \n\t "
++            "xvcmpgtdp  51,48,49  \n\t "
+ 
+             "addi     %[ptr_tmp] ,%[ptr_tmp] , 128 \n\t"   
+ 
+@@ -114,7 +114,7 @@ static BLASLONG ziamin_kernel_16_TUNED(BLASLONG n, FLOAT *x, FLOAT *minf) {
+             "lxvd2x  44,      0,%[ptr_tmp] \n\t"
+             "lxvd2x  45, %[i16],%[ptr_tmp] \n\t"
+ 
+-            "xvcmpgedp  2,0,1  \n\t "             
++            "xvcmpgtdp  2,0,1  \n\t "             
+             "lxvd2x  46, %[i32],%[ptr_tmp] \n\t"
+             "lxvd2x  47, %[i48],%[ptr_tmp] \n\t"
+ 
+@@ -126,7 +126,7 @@ static BLASLONG ziamin_kernel_16_TUNED(BLASLONG n, FLOAT *x, FLOAT *minf) {
+ 
+              //cmp with previous
+ 
+-            "xvcmpgedp 4,39,3     \n\t "  
++            "xvcmpgtdp 4,39,3     \n\t "  
+             "vaddudm   5,5,4      \n\t"     
+ 
+             "lxvd2x  48, %[i64],%[ptr_tmp] \n\t"
+@@ -166,8 +166,8 @@ static BLASLONG ziamin_kernel_16_TUNED(BLASLONG n, FLOAT *x, FLOAT *minf) {
+             "xvadddp    48,  4,5 \n\t"
+             "xvadddp    49,  44,45 \n\t"
+ 
+-            "xvcmpgedp  50,46,47  \n\t "
+-            "xvcmpgedp  51,48,49  \n\t "
++            "xvcmpgtdp  50,46,47  \n\t "
++            "xvcmpgtdp  51,48,49  \n\t "
+ 
+             "addi     %[ptr_tmp] ,%[ptr_tmp] , 128 \n\t"   
+ 
+@@ -179,7 +179,7 @@ static BLASLONG ziamin_kernel_16_TUNED(BLASLONG n, FLOAT *x, FLOAT *minf) {
+             "lxvd2x  44,      0,%[ptr_tmp] \n\t"
+             "lxvd2x  45, %[i16],%[ptr_tmp] \n\t"
+ 
+-            "xvcmpgedp  2,0,1  \n\t "             
++            "xvcmpgtdp  2,0,1  \n\t "             
+             "lxvd2x  46, %[i32],%[ptr_tmp] \n\t"
+             "lxvd2x  47, %[i48],%[ptr_tmp] \n\t"
+ 
+@@ -191,7 +191,7 @@ static BLASLONG ziamin_kernel_16_TUNED(BLASLONG n, FLOAT *x, FLOAT *minf) {
+ 
+              //cmp with previous
+ 
+-            "xvcmpgedp 4,39,3     \n\t "  
++            "xvcmpgtdp 4,39,3     \n\t "  
+             "vaddudm   5,5,4      \n\t"     
+ 
+             "lxvd2x  48, %[i64],%[ptr_tmp] \n\t"
+@@ -235,15 +235,15 @@ static BLASLONG ziamin_kernel_16_TUNED(BLASLONG n, FLOAT *x, FLOAT *minf) {
+ 
+ 
+ 
+-            "xvcmpgedp  50,46,47  \n\t "
+-            "xvcmpgedp  51,48,49  \n\t "
++            "xvcmpgtdp  50,46,47  \n\t "
++            "xvcmpgtdp  51,48,49  \n\t "
+ 
+             "xxsel    32,40,41,50 \n\t"
+             "xxsel     0,46,47,50 \n\t" 
+             "xxsel    33,42,43,51 \n\t"
+             "xxsel     1,48,49,51 \n\t"  
+ 
+-            "xvcmpgedp  2,0,1  \n\t " 
++            "xvcmpgtdp  2,0,1  \n\t " 
+             "xxsel    32,32,33,2 \n\t" 
+             "xxsel    3,0,1,2 \n\t" 
+      
+@@ -252,7 +252,7 @@ static BLASLONG ziamin_kernel_16_TUNED(BLASLONG n, FLOAT *x, FLOAT *minf) {
+             "addi     %[ptr_tmp] ,%[ptr_tmp] , 128 \n\t"            
+              //cmp with previous
+ 
+-            "xvcmpgedp 4,39,3     \n\t "  
++            "xvcmpgtdp 4,39,3     \n\t "  
+             "vaddudm   5,5,4      \n\t"     
+             "xxsel     38,38,32,4 \n\t" 
+             "xxsel    39,39,3,4    \n\t" 
+@@ -267,7 +267,7 @@ static BLASLONG ziamin_kernel_16_TUNED(BLASLONG n, FLOAT *x, FLOAT *minf) {
+             //cr6 0 bit set if all true, cr6=4*6+bit_ind=24,0011at CR(BI)==1, at=10 hint that it occurs rarely
+              //0b001110=14
+             "bc 14,24, 3f  \n\t" 
+-            "xvcmpgedp  4,39, 40  \n\t"
++            "xvcmpgtdp  4,39, 40  \n\t"
+             "xxsel    0,39,40,4           \n\t"
+             "xxsel    1,38,32,4  \n\t"
+             "stxsdx    0,0,%[ptr_minf]     \n\t" 
+diff --git a/kernel/power/saxpy.c b/kernel/power/saxpy.c
+new file mode 100644
+index 0000000..393cdfa
+--- /dev/null
++++ b/kernel/power/saxpy.c
+@@ -0,0 +1,129 @@
++/***************************************************************************
++Copyright (c) 2013-2018, The OpenBLAS Project
++All rights reserved.
++Redistribution and use in source and binary forms, with or without
++modification, are permitted provided that the following conditions are
++met:
++1. Redistributions of source code must retain the above copyright
++notice, this list of conditions and the following disclaimer.
++2. Redistributions in binary form must reproduce the above copyright
++notice, this list of conditions and the following disclaimer in
++the documentation and/or other materials provided with the
++distribution.
++3. Neither the name of the OpenBLAS project nor the names of
++its contributors may be used to endorse or promote products
++derived from this software without specific prior written permission.
++THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
++AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
++IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
++ARE DISCLAIMED. IN NO EVENT SHALL THE OPENBLAS PROJECT OR CONTRIBUTORS BE
++LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
++DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
++SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
++CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
++OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE
++USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
++*****************************************************************************/
++
++
++#include "common.h"
++
++ 
++
++
++#ifndef HAVE_KERNEL_8
++#include <altivec.h> 
++
++static void saxpy_kernel_64(BLASLONG n, FLOAT *x, FLOAT *y, FLOAT alpha)
++{
++    BLASLONG  i = 0;
++    __vector float v_a = {alpha,alpha,alpha,alpha}; 
++    __vector float * v_y=(__vector float *)y;
++    __vector float * v_x=(__vector float *)x;
++        
++    for(; i<n/4; i+=16){
++
++        v_y[i]    += v_a * v_x[i];
++        v_y[i+1]  += v_a * v_x[i+1];
++        v_y[i+2]  += v_a * v_x[i+2];
++        v_y[i+3]  += v_a * v_x[i+3];
++        v_y[i+4]  += v_a * v_x[i+4];
++        v_y[i+5]  += v_a * v_x[i+5];
++        v_y[i+6]  += v_a * v_x[i+6];
++        v_y[i+7]  += v_a * v_x[i+7]; 
++        v_y[i+8]  += v_a * v_x[i+8];
++        v_y[i+9]  += v_a * v_x[i+9];
++        v_y[i+10] += v_a * v_x[i+10];
++        v_y[i+11] += v_a * v_x[i+11];
++        v_y[i+12] += v_a * v_x[i+12];
++        v_y[i+13] += v_a * v_x[i+13];
++        v_y[i+14] += v_a * v_x[i+14];
++        v_y[i+15] += v_a * v_x[i+15];
++    }
++}
++#endif
++
++int CNAME(BLASLONG n, BLASLONG dummy0, BLASLONG dummy1, FLOAT da, FLOAT *x, BLASLONG inc_x, FLOAT *y, BLASLONG inc_y, FLOAT *dummy, BLASLONG dummy2)
++{
++	BLASLONG i=0;
++	BLASLONG ix=0,iy=0;
++
++	if ( n <= 0 )  return(0);
++
++	if ( (inc_x == 1) && (inc_y == 1) )
++	{
++
++		BLASLONG n1 = n & -64;
++
++		if ( n1 )
++			saxpy_kernel_64(n1, x, y, da);
++
++		i = n1;
++		while(i < n)
++		{
++
++			y[i] += da * x[i] ;
++			i++ ;
++
++		}
++		return(0);
++
++
++	}
++
++	BLASLONG n1 = n & -4;
++
++	while(i < n1)
++	{
++
++		FLOAT m1      = da * x[ix] ;
++		FLOAT m2      = da * x[ix+inc_x] ;
++		FLOAT m3      = da * x[ix+2*inc_x] ;
++		FLOAT m4      = da * x[ix+3*inc_x] ;
++
++		y[iy]         += m1 ;
++		y[iy+inc_y]   += m2 ;
++		y[iy+2*inc_y] += m3 ;
++		y[iy+3*inc_y] += m4 ;
++
++		ix  += inc_x*4 ;
++		iy  += inc_y*4 ;
++		i+=4 ;
++
++	}
++
++	while(i < n)
++	{
++
++		y[iy] += da * x[ix] ;
++		ix  += inc_x ;
++		iy  += inc_y ;
++		i++ ;
++
++	}
++	return(0);
++
++}
++
++
++

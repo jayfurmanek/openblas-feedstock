@@ -41,8 +41,17 @@ fi
 #    https://github.com/scikit-learn/scikit-learn/issues/636
 # USE_SIMPLE_THREADED_LEVEL3=1
 
+# Set CPU Target
+TARGET=""
+if [[ ${target_platform} == linux-aarch64 ]]; then
+  TARGET="TARGET=ARMV8"
+fi
+if [[ ${target_platform} == linux-ppc64le ]]; then
+  TARGET="TARGET=POWER8"
+fi
+
 make DYNAMIC_ARCH=1 BINARY=${ARCH} NO_LAPACK=0 NO_AFFINITY=1 USE_THREAD=1 NUM_THREADS=128 \
-     USE_OPENMP="${USE_OPENMP}" CFLAGS="${CF}" FFLAGS="${FFLAGS}"
+     USE_OPENMP="${USE_OPENMP}" CFLAGS="${CF}" FFLAGS="${FFLAGS} -frecursive" HOST=${HOST} $TARGET
 OPENBLAS_NUM_THREADS=${CPU_COUNT} CFLAGS="${CF}" FFLAGS="${FFLAGS}" make test
 OPENBLAS_NUM_THREADS=${CPU_COUNT} CFLAGS="${CF}" FFLAGS="${FFLAGS}" make lapack-test
 CFLAGS="${CF}" FFLAGS="${FFLAGS}" make install PREFIX="${PREFIX}"
